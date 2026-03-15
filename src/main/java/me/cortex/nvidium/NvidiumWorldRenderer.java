@@ -31,6 +31,9 @@ import static org.lwjgl.opengl.GL11.glGetInteger;
 import static org.lwjgl.opengl.NVXGPUMemoryInfo.GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX;
 
 public class NvidiumWorldRenderer {
+    static {
+        System.err.println("NWR-STATIC: class init start");
+    }
     private static final RenderDevice device = new RenderDevice();
 
     private final UploadingBufferStream uploadStream;
@@ -47,6 +50,8 @@ public class NvidiumWorldRenderer {
 
     //Note: the reason that asyncChunkTracker is passed in as an already constructed object is cause of the amount of argmuents it takes to construct it
     public NvidiumWorldRenderer(AsyncOcclusionTracker asyncChunkTracker) {
+        System.err.println("NWR-CTOR: entered ctor");
+        System.err.println("NWR-CTOR: before update_allowed_memory");
         int frames = SodiumClientMod.options().advanced.cpuRenderAheadLimit+1;
         //32 mb upload buffer
         this.uploadStream = new UploadingBufferStream(device, 32000000);
@@ -54,12 +59,19 @@ public class NvidiumWorldRenderer {
         this.downloadStream = new DownloadTaskStream(device, frames, 8000000);
 
         update_allowed_memory();
+        System.err.println("NWR-CTOR: after update_allowed_memory");
         //this.sectionManager = new SectionManager(device, max_geometry_memory*1024*1024, uploadStream, 150, 24, CompactChunkVertex.STRIDE);
         this.sectionManager = new SectionManager(device, max_geometry_memory*1024*1024, uploadStream, Nvidium.config.use_sodium_vertex_format ? ChunkMeshFormats.COMPACT.getVertexFormat().getStride() : NvidiumCompactChunkVertex.STRIDE, this);
+        System.err.println("NWR: before RenderPipeline ctor");
         this.renderPipeline = new RenderPipeline(device, uploadStream, downloadStream, sectionManager);
+        System.err.println("NWR: after RenderPipeline ctor");
 
 
+        System.err.println("NWR: before asyncChunkTracker assign");
+        System.err.println("NWR-CTOR: before asyncChunkTracker assign");
         this.asyncChunkTracker = asyncChunkTracker;
+        System.err.println("NWR-CTOR: after asyncChunkTracker assign");
+        System.err.println("NWR: ctor done");
     }
 
     public void enqueueRegionSort(int regionId) {
@@ -82,20 +94,45 @@ public class NvidiumWorldRenderer {
     }
 
     public void renderFrame(TerrainRenderPass pass, Viewport viewport, FogParameters fogParameters, ChunkRenderMatrices matrices, double x, double y, double z, GpuSampler terrainSampler) {
+        System.err.println("NWR-RENDERFRAME: enter pass=" + pass);
+
         renderPipeline.renderFrame(pass, viewport, fogParameters, matrices, x, y, z, terrainSampler);
 
+        System.err.println("NWR-RENDERFRAME: after renderPipeline.renderFrame");
+
+        int nvidiumEvictGuard = 0;
+        int nvidiumPrevUsedMb = sectionManager.terrainAreana.getUsedMB();
         while (sectionManager.terrainAreana.getUsedMB() > (max_geometry_memory - 100)) {
+            System.err.println("NWR-RENDERFRAME: before removeARegion usedMB=" + sectionManager.terrainAreana.getUsedMB());
             renderPipeline.removeARegion();
+            int nvidiumNowUsedMb = sectionManager.terrainAreana.getUsedMB();
+            System.err.println("NWR-RENDERFRAME: after removeARegion usedMB=" + nvidiumNowUsedMb);
+
+            if (nvidiumNowUsedMb >= nvidiumPrevUsedMb) {
+                Nvidium.LOGGER.warn("Nvidium eviction loop made no progress: usedMB={} limitMB={}", nvidiumNowUsedMb, max_geometry_memory);
+                break;
+            }
+            nvidiumPrevUsedMb = nvidiumNowUsedMb;
+            if (++nvidiumEvictGuard > 10000) {
+                Nvidium.LOGGER.warn("Nvidium eviction loop bailed out after too many iterations: usedMB={} limitMB={}", nvidiumNowUsedMb, max_geometry_memory);
+                break;
+            }
         }
 
         if (Nvidium.SUPPORTS_PERSISTENT_SPARSE_ADDRESSABLE_BUFFER && (System.currentTimeMillis() - last_sample_time) > 60000) {
+            System.err.println("NWR-RENDERFRAME: before update_allowed_memory periodic");
             last_sample_time = System.currentTimeMillis();
             update_allowed_memory();
+            System.err.println("NWR-RENDERFRAME: after update_allowed_memory periodic");
         }
+
+        System.err.println("NWR-RENDERFRAME: exit pass=" + pass);
     }
 
     public void renderTranslucent(TerrainRenderPass pass, GpuSampler terrainSampler) {
+        System.err.println("NWR-TRANSLUCENT: enter pass=" + pass);
         this.renderPipeline.renderTranslucent(pass, terrainSampler);
+        System.err.println("NWR-TRANSLUCENT: exit pass=" + pass);
     }
 
     public void deleteSection(RenderSection section) {

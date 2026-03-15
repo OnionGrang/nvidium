@@ -29,6 +29,10 @@ import static me.cortex.nvidium.Nvidium.LOGGER;
 public class SectionManager {
     public static final int SECTION_SIZE = 32 + 16;
 
+    private static final int TERRAIN_ARENA_SHIFT = 26;
+    private static final int TRANSLUCENCY_ARENA_SHIFT = 28;
+    private static final int ARENA_MASK = 0x3;
+
     //Sections should be grouped and batched into sizes of the count of sections in a region
     private final RegionManager regionManager;
 
@@ -47,21 +51,43 @@ public class SectionManager {
     private final LongSet hiddenSectionKeys = new LongOpenHashSet();
 
     public SectionManager(RenderDevice device, long fallbackMemorySize, UploadingBufferStream uploadStream, int quadVertexSize, NvidiumWorldRenderer worldRenderer) {
+        System.err.println("SM-CTOR: entered ctor");
+        System.err.println("SM-CTOR: before maxRegions");
         int maxRegions = 50_000;
+        System.err.println("SM-CTOR: after maxRegions");
 
+        System.err.println("SM-CTOR: before device assign");
         this.device = device;
+        System.err.println("SM-CTOR: after device assign");
+        System.err.println("SM-CTOR: before uploadStream assign");
         this.uploadStream = uploadStream;
+        System.err.println("SM-CTOR: after uploadStream assign");
 
+        System.err.println("SM-CTOR: before quadVertexSize assign");
         this.quadVertexSize = quadVertexSize;
+        System.err.println("SM-CTOR: after quadVertexSize assign");
 
+        System.err.println("SM-CTOR: before BufferArena ctor");
         this.terrainAreana = new BufferArena(device, fallbackMemorySize, quadVertexSize);
+        System.err.println("SM-CTOR: after BufferArena ctor");
+        System.err.println("SM-CTOR: before RegionManager ctor");
         this.regionManager = new RegionManager(device, maxRegions, maxRegions * 200, uploadStream, worldRenderer::enqueueRegionSort);
+        System.err.println("SM-CTOR: after RegionManager ctor");
 
+        System.err.println("SM-CTOR: before section2id defaultReturnValue");
         this.section2id.defaultReturnValue(-1);
+        System.err.println("SM-CTOR: after section2id defaultReturnValue");
+        System.err.println("SM-CTOR: before section2terrain defaultReturnValue");
         this.section2terrain.defaultReturnValue(-1);
+        System.err.println("SM-CTOR: after section2terrain defaultReturnValue");
+        System.err.println("SM-CTOR: before section2index defaultReturnValue");
         this.section2index.defaultReturnValue(-1);
+        System.err.println("SM-CTOR: after section2index defaultReturnValue");
 
+        System.err.println("SM-CTOR: before translucencyQuadCounts defaultReturnValue");
         this.translucencyQuadCounts.defaultReturnValue(null);
+        System.err.println("SM-CTOR: after translucencyQuadCounts defaultReturnValue");
+        System.err.println("SM-CTOR: ctor done");
     }
 
     public void uploadIndexBuffer(IntBuffer indexBuffer, int[] quadCountData, long upload) {
@@ -131,7 +157,15 @@ public class SectionManager {
 
         long metadata = regionManager.setSectionData(sectionIdx);
         metadata += 32; // Go to translucency data offset
-        MemoryUtil.memPutInt(metadata, indexDataAddress * quadVertexSize); // Scale address since we have ints instead of ChunkVertexFormat
+        int indexArena = BufferArena.unpackArena(indexDataAddress);
+        int indexLocal = BufferArena.unpackLocalHandle(indexDataAddress);
+
+        int headerY = MemoryUtil.memGetInt(metadata - 32 + 4);
+        headerY &= ~(ARENA_MASK << TRANSLUCENCY_ARENA_SHIFT);
+        headerY |= (indexArena & ARENA_MASK) << TRANSLUCENCY_ARENA_SHIFT;
+        MemoryUtil.memPutInt(metadata - 32 + 4, headerY);
+
+        MemoryUtil.memPutInt(metadata, indexLocal * quadVertexSize); // Scale address since we have ints instead of ChunkVertexFormat
     }
 
     public void uploadChunkBuildResult(ChunkBuildOutput result) {
@@ -208,9 +242,12 @@ public class SectionManager {
         //bits 18->26 taken by section id (used for translucency sorting/rendering)
         // 26->32 is free
         int px = section.getChunkX()<<8 | size.x<<4 | min.x;
-        int py = (section.getChunkY()&0x1FF)<<8 | size.y<<4 | min.y | (hideSectionBitSet?1<<17:0) | ((regionManager.getSectionRefId(sectionIdx))<<18);
+        int terrainArena = BufferArena.unpackArena(terrainAddress);
+        int terrainLocal = BufferArena.unpackLocalHandle(terrainAddress);
+
+        int py = (section.getChunkY()&0x1FF)<<8 | size.y<<4 | min.y | (hideSectionBitSet?1<<17:0) | ((regionManager.getSectionRefId(sectionIdx))<<18) | ((terrainArena & ARENA_MASK) << TERRAIN_ARENA_SHIFT);
         int pz = section.getChunkZ()<<8 | size.z<<4 | min.z;
-        int pw = terrainAddress;
+        int pw = terrainLocal;
         new Vector4i(px, py, pz, pw).getToAddress(metadata);
         metadata += 4*4;
 
@@ -226,7 +263,19 @@ public class SectionManager {
             if (result.isReusingUploadedIndexData()) {
                 int trIdx = this.section2index.get(sectionKey);
                 // Don't forget to scale and don't scale -1 (no data)
-                MemoryUtil.memPutInt(metadata, trIdx * (trIdx != -1 ? quadVertexSize : 1));
+                if (trIdx != -1) {
+                    int trArena = BufferArena.unpackArena(trIdx);
+                    int trLocal = BufferArena.unpackLocalHandle(trIdx);
+
+                    int headerY = MemoryUtil.memGetInt(metadata - 32 + 4);
+                    headerY &= ~(ARENA_MASK << TRANSLUCENCY_ARENA_SHIFT);
+                    headerY |= (trArena & ARENA_MASK) << TRANSLUCENCY_ARENA_SHIFT;
+                    MemoryUtil.memPutInt(metadata - 32 + 4, headerY);
+
+                    MemoryUtil.memPutInt(metadata, trLocal * quadVertexSize);
+                } else {
+                    MemoryUtil.memPutInt(metadata, -1);
+                }
             } else {
                 MemoryUtil.memPutInt(metadata, -1);
 

@@ -79,8 +79,14 @@ public class RenderPipeline {
                     8 +     // uvec2     *translucencyCommandBuffer
                     8 +     // uvec2     *temporalCommandBuffer
                     8 +     // uint16_t  *sortingRegionList
-                    8 +     // Vertex    *terrainData
-                    8 +     // uint      *translucencyIndexData TODO
+                    8 +     // Vertex    *terrainData0
+                    8 +     // Vertex    *terrainData1
+                    8 +     // Vertex    *terrainData2
+                    8 +     // Vertex    *terrainData3
+                    8 +     // uint      *translucencyIndexData0
+                    8 +     // uint      *translucencyIndexData1
+                    8 +     // uint      *translucencyIndexData2
+                    8 +     // uint      *translucencyIndexData3
                     8 +     // mat4      *transformationArray
                     8 +     // uint64_t  *originArray
                     8 +     // uint32_t  *statistics_buffe
@@ -127,18 +133,35 @@ public class RenderPipeline {
         this.downloadStream = downloadStream;
         this.sectionManager = sectionManager;
         this.compiledForFog = Nvidium.config.render_fog;
+        System.err.println("RP: ctor start");
 
+        System.err.println("RP: before PrimaryTerrainRasterizer");
         terrainRasterizer = new PrimaryTerrainRasterizer();
+        System.err.println("RP: after PrimaryTerrainRasterizer");
+        System.err.println("RP: before RegionRasterizer");
         regionRasterizer = new RegionRasterizer();
+        System.err.println("RP: after RegionRasterizer");
+        System.err.println("RP: before SectionRasterizer");
         sectionRasterizer = new SectionRasterizer();
+        System.err.println("RP: after SectionRasterizer");
+        System.err.println("RP: before TemporalTerrainRasterizer");
         temporalRasterizer = new TemporalTerrainRasterizer();
+        System.err.println("RP: after TemporalTerrainRasterizer");
+        System.err.println("RP: before TranslucentTerrainRasterizer");
         translucencyTerrainRasterizer = new TranslucentTerrainRasterizer();
+        System.err.println("RP: after TranslucentTerrainRasterizer");
+        System.err.println("RP: before SortRegionSectionPhase");
         regionSectionSorter = new SortRegionSectionPhase();
+        System.err.println("RP: after SortRegionSectionPhase");
+        System.err.println("RP: before CmdBufferBuilder");
         cmdBufferBuilder = new CmdBufferBuilder();
+        System.err.println("RP: after CmdBufferBuilder");
 
         int maxRegions = sectionManager.getRegionManager().maxRegions();
 
+        System.err.println("RP: before sceneUniform alloc");
         sceneUniform = device.createDeviceOnlyMappedBuffer(SCENE_SIZE + maxRegions*2L);
+        System.err.println("RP: after sceneUniform alloc");
         regionVisibility = device.createDeviceOnlyMappedBuffer(maxRegions);
         sectionVisibility = device.createDeviceOnlyMappedBuffer(maxRegions * 256L);
         sectionIndices = device.createDeviceOnlyMappedBuffer(maxRegions * 256L * 3L);
@@ -152,7 +175,9 @@ public class RenderPipeline {
         regionVisibilityTracker = new BitSet(maxRegions);
         regionVisibilityTracking = new RegionVisibilityTracker(downloadStream, maxRegions);
 
+        System.err.println("RP: before statisticsBuffer alloc");
         statisticsBuffer = device.createDeviceOnlyMappedBuffer(4*4);
+        System.err.println("RP: after statisticsBuffer alloc");
         stats = new Statistics();
 
 
@@ -166,8 +191,11 @@ public class RenderPipeline {
             }
         }
         //Clear the origin offset
+        System.err.println("RP: before originOffset clear");
         nglClearNamedBufferData(this.originOffsetArray.getId(), GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 0);
+        System.err.println("RP: after originOffset clear");
 
+        System.err.println("RP: ctor done");
 
     }
 
@@ -334,9 +362,21 @@ public class RenderPipeline {
             addr += 8;
             MemoryUtil.memPutLong(addr, regionSortingList.getDeviceAddress());
             addr += 8;
-            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.buffer.getDeviceAddress());
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(0));
             addr += 8;
-            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.buffer.getDeviceAddress());
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(1));
+            addr += 8;
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(2));
+            addr += 8;
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(3));
+            addr += 8;
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(0));
+            addr += 8;
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(1));
+            addr += 8;
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(2));
+            addr += 8;
+            MemoryUtil.memPutLong(addr, sectionManager.terrainAreana.getArenaDeviceAddressByIndex(3));
             addr += 8;
             MemoryUtil.memPutLong(addr, this.transformationArray.getDeviceAddress());
             addr += 8;

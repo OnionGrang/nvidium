@@ -14,7 +14,7 @@ public class Nvidium {
     public static boolean IS_COMPATIBLE = false;
     public static boolean IS_ENABLED = false;
     public static boolean IS_DEBUG = System.getProperty("nvidium.isDebug", "false").equals("TRUE");
-    public static boolean SUPPORTS_PERSISTENT_SPARSE_ADDRESSABLE_BUFFER = true;
+    public static boolean SUPPORTS_PERSISTENT_SPARSE_ADDRESSABLE_BUFFER = false;
     public static boolean FORCE_DISABLE = false;
 
     public static NvidiumConfig config = NvidiumConfig.loadOrCreate();
@@ -27,6 +27,7 @@ public class Nvidium {
     }
 
     public static void checkSystemIsCapable() {
+        System.err.println("NVIDIUM: checkSystemIsCapable enter");
         var cap = GL.getCapabilities();
         boolean supported = cap.GL_NV_mesh_shader &&
                 cap.GL_NV_uniform_buffer_unified_memory &&
@@ -47,6 +48,7 @@ public class Nvidium {
 
         if (IS_COMPATIBLE) {
             LOGGER.info("Enabling Nvidium");
+            System.err.println("NVIDIUM: after enabling log");
         }
         IS_ENABLED = IS_COMPATIBLE;
     }
