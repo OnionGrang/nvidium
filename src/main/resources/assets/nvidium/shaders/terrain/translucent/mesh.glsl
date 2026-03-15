@@ -23,6 +23,7 @@ layout(binding = 1) uniform sampler2D tex_light;
 #ifdef TRANSLUCENCY_SORTING_QUADS
 vec3 depthPos = vec3(0);
 shared float depthBuffers[32];
+
 #endif
 
 layout(local_size_x = 32) in;
@@ -60,7 +61,7 @@ void emitQuadIndicies() {
 }
 
 void emitVertex(uint vertexBaseId, uint innerId) {
-    Vertex V = terrainData[vertexBaseId + innerId];
+    Vertex V = readTerrainVertex(0u, vertexBaseId + innerId);
     uint outId = (gl_LocalInvocationID.x<<2)+innerId;
     vec3 pos = decodeVertexPosition(V)+originAndBaseData.xyz;
     gl_MeshVerticesNV[outId].gl_Position = MVP*vec4(pos,1.0);
@@ -82,7 +83,7 @@ void emitVertex(uint vertexBaseId, uint innerId) {
 #ifdef TRANSLUCENCY_SORTING_QUADS
 void computeDepth(uint vertexBaseId) {
     for (uint innerId = 0; innerId < 4; innerId++) {
-        Vertex V = terrainData[vertexBaseId + innerId];
+        Vertex V = readTerrainVertex(0u, vertexBaseId + innerId);
         uint outId = (gl_LocalInvocationID.x<<2)+innerId;
         vec3 pos = decodeVertexPosition(V)+originAndBaseData.xyz;
         vec3 exactPos = pos+subchunkOffset.xyz;
@@ -95,25 +96,25 @@ void swapQuads(uint idxA, uint idxB) {
         return;
     }
 
-    Vertex A0 = terrainData[(idxA<<2)+0];
-    Vertex A1 = terrainData[(idxA<<2)+1];
-    Vertex A2 = terrainData[(idxA<<2)+2];
-    Vertex A3 = terrainData[(idxA<<2)+3];
-    Vertex B0 = terrainData[(idxB<<2)+0];
-    Vertex B1 = terrainData[(idxB<<2)+1];
-    Vertex B2 = terrainData[(idxB<<2)+2];
-    Vertex B3 = terrainData[(idxB<<2)+3];
+    Vertex A0 = readTerrainVertex(0u, (idxA<<2)+0);
+    Vertex A1 = readTerrainVertex(0u, (idxA<<2)+1);
+    Vertex A2 = readTerrainVertex(0u, (idxA<<2)+2);
+    Vertex A3 = readTerrainVertex(0u, (idxA<<2)+3);
+    Vertex B0 = readTerrainVertex(0u, (idxB<<2)+0);
+    Vertex B1 = readTerrainVertex(0u, (idxB<<2)+1);
+    Vertex B2 = readTerrainVertex(0u, (idxB<<2)+2);
+    Vertex B3 = readTerrainVertex(0u, (idxB<<2)+3);
     //groupMemoryBarrier();
     //memoryBarrier();
     //barrier();
-    terrainData[(idxA<<2)+0] = B0;
-    terrainData[(idxA<<2)+1] = B1;
-    terrainData[(idxA<<2)+2] = B2;
-    terrainData[(idxA<<2)+3] = B3;
-    terrainData[(idxB<<2)+0] = A0;
-    terrainData[(idxB<<2)+1] = A1;
-    terrainData[(idxB<<2)+2] = A2;
-    terrainData[(idxB<<2)+3] = A3;
+    writeTerrainVertex(0u, (idxA<<2)+0, B0);
+    writeTerrainVertex(0u, (idxA<<2)+1, B1);
+    writeTerrainVertex(0u, (idxA<<2)+2, B2);
+    writeTerrainVertex(0u, (idxA<<2)+3, B3);
+    writeTerrainVertex(0u, (idxB<<2)+0, A0);
+    writeTerrainVertex(0u, (idxB<<2)+1, A1);
+    writeTerrainVertex(0u, (idxB<<2)+2, A2);
+    writeTerrainVertex(0u, (idxB<<2)+3, A3);
     //groupMemoryBarrier();
     //memoryBarrier();
     //barrier();
@@ -158,6 +159,7 @@ void main() {
         return;
     }
 
+
     emitQuadIndicies();
 
     //Each pair of meshlet invokations emits 4 vertices each and 2 primative each
@@ -166,7 +168,7 @@ void main() {
     if (translucencyIndex == -1) { // If no translucency data, fallback to quad order
         id = (floatBitsToUint(originAndBaseData.w) + gl_GlobalInvocationID.x)<<2;
     } else { // If we have sorting data, process the vertex at the index translucencyIndexData
-        id = (floatBitsToUint(originAndBaseData.w) + translucencyIndexData[translucencyIndex + gl_GlobalInvocationID.x])<<2;
+        id = (floatBitsToUint(originAndBaseData.w) + readTranslucencyIndex(0u, translucencyIndex + gl_GlobalInvocationID.x))<<2;
     }
     #else
     id = (floatBitsToUint(originAndBaseData.w) + gl_GlobalInvocationID.x)<<2;

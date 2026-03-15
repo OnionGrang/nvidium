@@ -115,10 +115,10 @@ void main() {
     bool triangle1 = (gl_LocalInvocationIndex & uint(1)) == 1;
 
     //Load corner point, alterenated w.r.t neighbor thread
-    Vc = terrainData[(quadId<<2)+(triangle1?2:0)];
+    Vc = readTerrainVertex(0u, (quadId << 2) + (triangle1 ? 2 : 0));
 
     //Load our unique vertex V1 or V3 depending on triangle0
-    V = terrainData[(quadId<<2)+(triangle1?3:1)];
+    V  = readTerrainVertex(0u, (quadId << 2) + (triangle1 ? 3 : 1));
 
     //Transform common and our vertices
     pVc = transformVertex(Vc);

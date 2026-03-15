@@ -85,8 +85,14 @@ layout(std140, binding=0) uniform SceneData {
     readonly restrict uint16_t *sortingRegionList;
 
     //TODO:FIXME: only apply non readonly to translucency mesh
-    restrict Vertex *terrainData;//readonly
-    restrict uint   *translucencyIndexData;
+    restrict Vertex *terrainData0;
+    restrict Vertex *terrainData1;
+    restrict Vertex *terrainData2;
+    restrict Vertex *terrainData3;
+    restrict uint   *translucencyIndexData0;
+    restrict uint   *translucencyIndexData1;
+    restrict uint   *translucencyIndexData2;
+    restrict uint   *translucencyIndexData3;
 
     //TODO: possibly make this a uniform instead of a buffer, but it might get quite large is the issue
     readonly restrict mat4 *transformationArray;
@@ -132,4 +138,39 @@ bool useBlockFaceCulling() {
 
 bool useRGSS() {
     return (flags&2)!=0;
+}
+
+uint getTerrainArena(ivec4 header) {
+    return (uint(header.y) >> 26u) & 0x3u;
+}
+
+uint getTranslucencyArena(ivec4 header) {
+    return (uint(header.y) >> 28u) & 0x3u;
+}
+
+Vertex readTerrainVertex(uint arena, uint index) {
+    switch (arena) {
+        case 0u: return terrainData0[index];
+        case 1u: return terrainData1[index];
+        case 2u: return terrainData2[index];
+        default: return terrainData3[index];
+    }
+}
+
+void writeTerrainVertex(uint arena, uint index, Vertex v) {
+    switch (arena) {
+        case 0u: terrainData0[index] = v; break;
+        case 1u: terrainData1[index] = v; break;
+        case 2u: terrainData2[index] = v; break;
+        default: terrainData3[index] = v; break;
+    }
+}
+
+uint readTranslucencyIndex(uint arena, uint index) {
+    switch (arena) {
+        case 0u: return translucencyIndexData0[index];
+        case 1u: return translucencyIndexData1[index];
+        case 2u: return translucencyIndexData2[index];
+        default: return translucencyIndexData3[index];
+    }
 }
